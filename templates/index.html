@@ -71,7 +71,7 @@
     <script>
         let chart;
         function charger() {
-            fetch('http://localhost:3000/api/prix').then(r => r.json()).then(data => {
+            fetch('/api/prix').then(r => r.json()).then(data => {
                 let html = ''; const stats = {}; const bestOf = {};
                 let sumAll = 0;
 
@@ -138,7 +138,7 @@
         }
         function ajouter() {
             const body = { nom: document.getElementById('nom').value, prix: document.getElementById('prix').value, marche: document.getElementById('mar').value, categorie: document.getElementById('cat').value, unite: document.getElementById('uni').value, saison: document.getElementById('sai').value };
-            fetch('http://localhost:3000/api/prix', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) }).then(() => charger());
+            fetch('/api/ajouter', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) }).then(() => charger());
         }
         charger();
     </script>

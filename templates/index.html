@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>EcoPrix Yaoundé(Analyse du coût de vie alimentaire à Yaoundé) </title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --primary: #1b5e20; --bg-img: url('https://upload.wikimedia.org/wikipedia/commons/thumb/0/03/Market_in_Ouagadougou.jpg/1200px-Market_in_Ouagadougou.jpg'); }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg-img) center/cover fixed; margin: 0; padding: 15px; }
+        body::before { content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: -1; }
+        .container { max-width: 1100px; margin: auto; }
+        .card { background: rgba(255, 255, 255, 0.95); padding: 15px; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); backdrop-filter: blur(5px); margin-bottom: 15px; }
+        .dash-grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 15px; margin-bottom: 15px; }
+        .form-container { background: white; padding: 20px; border-radius: 12px; margin-bottom: 15px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .field { display: flex; flex-direction: column; }
+        label { font-size: 11px; font-weight: bold; color: #444; margin-bottom: 4px; text-transform: uppercase; }
+        input, select, button { padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+        button { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; grid-column: span 3; margin-top: 5px; }
+        .meal-sec { margin-bottom: 10px; padding: 10px; border-radius: 8px; background: #f1f8e9; border-left: 4px solid var(--primary); font-size: 12px; }
+        .res-val { color: var(--primary); font-weight: bold; float: right; }
+        #liste { max-height: 300px; overflow-y: auto; }
+        .price-card { background: white; padding: 10px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; border-left: 5px solid #666; font-size: 13px; }
+        .conclu { background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 5px solid #1565c0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 style="text-align:center; color: white; text-shadow: 2px 2px 4px #000;">📊 EcoPrix Yaoundé : Analyse du coût de vie alimentaire à Yaoundé</h2>
+
+        <div class="conclu">
+            <h4 style="margin:0">🔍 Analyse du Coût de la Vie</h4>
+            <p id="conclu-txt" style="margin:5px 0 0 0">Saisissez des produits pour voir l'analyse...</p>
+        </div>
+
+        <div class="dash-grid">
+            <div class="card">
+                <h4 style="margin:0 0 10px 0">🍱 Suggestions de Repas</h4>
+                <div class="meal-sec">
+                    <b>☕ Petit Déjeuner</b> <span class="res-val" id="p-pdj">0 F</span><br><span id="txt-pdj">Aucun produit</span>
+                </div>
+                <div class="meal-sec">
+                    <b>🍲 Déjeuner</b> <span class="res-val" id="p-dej">0 F</span><br><span id="txt-dej">Aucun produit</span>
+                </div>
+                <div class="meal-sec">
+                    <b>🥗 Dîner</b> <span class="res-val" id="p-din">0 F</span><br><span id="txt-din">Aucun produit</span>
+                </div>
+            </div>
+            <div class="card">
+                <h4 style="margin:0 0 10px 0">📈 Dispersion des Prix</h4>
+                <div style="height:220px"><canvas id="priceChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="form-container">
+            <div class="field"><label>Catégorie</label><select id="cat">
+                <option value="Céréale">Céréale</option><option value="Tubercule">Tubercule</option>
+                <option value="Légume">Légume</option><option value="Viande">Viande / Poisson</option>
+                <option value="Fruit">Fruit (Dessert)</option><option value="Boisson">Boisson</option><option value="Épice">Épice / Entrée</option>
+            </select></div>
+            <div class="field"><label>Produit</label><input type="text" id="nom" placeholder="Ex: Pain"></div>
+            <div class="field"><label>Unité</label><select id="uni"><option value="Tas">Tas</option><option value="Kilo">Kilo</option><option value="Unité">Unité</option></select></div>
+            <div class="field"><label>Prix (F)</label><input type="number" id="prix"></div>
+            <div class="field"><label>Marché</label><input type="text" id="mar" placeholder="Ex: Mokolo"></div>
+            <div class="field"><label>Saison</label><select id="sai"><option value="Sèche">Sèche</option><option value="Pluies">Pluies</option></select></div>
+            <button onclick="ajouter()">🚀 ANALYSER & ENREGISTRER</button>
+        </div>
+
+        <div id="liste"></div>
+    </div>
+
+    <script>
+        let chart;
+        function charger() {
+            fetch('http://localhost:3000/api/prix').then(r => r.json()).then(data => {
+                let html = ''; const stats = {}; const bestOf = {};
+                let sumAll = 0;
+
+                data.forEach(p => {
+                    const px = parseFloat(p.prix); 
+                    const nm = (p.nom_produit || "produit").toLowerCase().trim();
+                    const cat = p.categorie;
+                    sumAll += px;
+
+                    // Moyennes par produit
+                    if(!stats[nm]) stats[nm] = { s: 0, c: 0, min: px, marche: p.marche };
+                    stats[nm].s += px; stats[nm].c++;
+                    if(px < stats[nm].min) { stats[nm].min = px; stats[nm].marche = p.marche; }
+
+                    // Meilleur prix par catégorie pour les repas
+                    if(!bestOf[cat] || px < bestOf[cat].p) bestOf[cat] = { p: px, n: p.nom_produit };
+                    
+                    // Détection intelligente forcée pour Pain et Oeufs
+                    if(nm.includes("pain") && (!bestOf["pain_f"] || px < bestOf["pain_f"].p)) bestOf["pain_f"] = {p: px, n: p.nom_produit};
+                    if(nm.includes("oeuf") && (!bestOf["oeuf_f"] || px < bestOf["oeuf_f"].p)) bestOf["oeuf_f"] = {p: px, n: p.nom_produit};
+                });
+
+                // 1. ANALYSE COÛT DE LA VIE
+                const moyG = data.length ? sumAll/data.length : 0;
+                document.getElementById('conclu-txt').innerHTML = `Moyenne générale : <b>${Math.round(moyG)} F</b>. ` + 
+                (moyG > 2000 ? "⚠️ Coût de la vie élevé." : "✅ Coût de la vie stable.");
+
+                // 2. SUGGESTIONS REPAS (Correction automatique)
+                const getP = (k) => bestOf[k] ? bestOf[k].p : 0;
+                const getN = (k) => bestOf[k] ? bestOf[k].n : "...";
+
+                // PDJ : Pain + Oeufs + Boisson
+                document.getElementById('p-pdj').innerText = (getP("pain_f") + getP("oeuf_f") + getP("Boisson")) + " F";
+                document.getElementById('txt-pdj').innerText = `${getN("pain_f")} + ${getN("oeuf_f")} + ${getN("Boisson")}`;
+
+                // DEJEUNER : Entrée + Tubercule + Légume + Viande + Dessert
+                document.getElementById('p-dej').innerText = (getP("Épice") + getP("Tubercule") + getP("Légume") + getP("Viande") + getP("Fruit")) + " F";
+                document.getElementById('txt-dej').innerText = `${getN("Épice")} | ${getN("Tubercule")}+${getN("Légume")}+${getN("Viande")} | ${getN("Fruit")}`;
+
+                // DINER : Céréale + Légume + Boisson
+                document.getElementById('p-din').innerText = (getP("Céréale") + getP("Légume") + getP("Boisson")) + " F";
+                document.getElementById('txt-din').innerText = `${getN("Céréale")} + ${getN("Légume")} + ${getN("Boisson")}`;
+
+                // 3. LISTE DES PRODUITS
+                data.forEach(p => {
+                    const nm = (p.nom_produit || "produit").toLowerCase().trim();
+                    const avg = stats[nm].s / stats[nm].c;
+                    const isBest = p.prix <= stats[nm].min;
+                    html += `<div class="price-card" style="border-left-color:${isBest?'#2ecc71':'#f39c12'}">
+                        <div><b>${p.nom_produit}</b> <small>(${p.marche})</small><br>
+                        <small>Moyenne: ${Math.round(avg)} F | Écart: ${Math.round(p.prix-avg)} F</small></div>
+                        <div style="text-align:right"><b>${p.prix} F</b><br>
+                        <small>${isBest?'✅ Optimal':'Mieux à '+stats[nm].marche}</small></div>
+                    </div>`;
+                });
+                document.getElementById('liste').innerHTML = html;
+
+                if(chart) chart.destroy();
+                chart = new Chart(document.getElementById('priceChart'), {
+                    type: 'scatter', data: { datasets: [{ label: 'Prix', data: data.map((p,i) => ({x:i, y:p.prix})), backgroundColor: '#1b5e20' }] },
+                    options: { maintainAspectRatio: false }
+                });
+            });
+        }
+        function ajouter() {
+            const body = { nom: document.getElementById('nom').value, prix: document.getElementById('prix').value, marche: document.getElementById('mar').value, categorie: document.getElementById('cat').value, unite: document.getElementById('uni').value, saison: document.getElementById('sai').value };
+            fetch('http://localhost:3000/api/prix', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) }).then(() => charger());
+        }
+        charger();
+    </script>
+</body>
+</html>
